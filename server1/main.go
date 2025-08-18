@@ -20,26 +20,54 @@ func main() {
 
 	log.Println("Starting MCP Test Server 1...")
 
+	hooks := &server.Hooks{}
+
+	hooks.AddBeforeAny(func(ctx context.Context, id any, method mcp.MCPMethod, message any) {
+		fmt.Printf("beforeAny: %s, %v, %v\n", method, id, message)
+	})
+	hooks.AddOnSuccess(func(ctx context.Context, id any, method mcp.MCPMethod, message any, result any) {
+		fmt.Printf("onSuccess: %s, %v, %v, %v\n", method, id, message, result)
+	})
+	hooks.AddOnError(func(ctx context.Context, id any, method mcp.MCPMethod, message any, err error) {
+		fmt.Printf("onError: %s, %v, %v, %v\n", method, id, message, err)
+	})
+	hooks.AddBeforeInitialize(func(ctx context.Context, id any, message *mcp.InitializeRequest) {
+		fmt.Printf("beforeInitialize: %v, %v\n", id, message)
+	})
+	hooks.AddOnRequestInitialization(func(ctx context.Context, id any, message any) error {
+		fmt.Printf("AddOnRequestInitialization: %v, %v\n", id, message)
+		// authorization verification and other preprocessing tasks are performed.
+		return nil
+	})
+	hooks.AddAfterInitialize(func(ctx context.Context, id any, message *mcp.InitializeRequest, result *mcp.InitializeResult) {
+		fmt.Printf("afterInitialize: %v, %v, %v\n", id, message, result)
+	})
+	hooks.AddAfterCallTool(func(ctx context.Context, id any, message *mcp.CallToolRequest, result *mcp.CallToolResult) {
+		fmt.Printf("afterCallTool: %v, %v, %v\n", id, message, result)
+	})
+	hooks.AddBeforeCallTool(func(ctx context.Context, id any, message *mcp.CallToolRequest) {
+		fmt.Printf("beforeCallTool: %v, %v\n", id, message)
+	})
+
 	// Create MCP server instance with only tool capabilities
 	mcpServer := server.NewMCPServer(
 		"Test Server 1",
 		"1.0.0",
 		server.WithToolCapabilities(true),
+		server.WithHooks(hooks),
 	)
 
-	// Setup the two tools
 	setupTools(mcpServer)
 
 	// Create streamable HTTP server and start it
 	log.Printf("Test Server 1 listening on port %s", *port)
 	log.Printf("MCP endpoint: http://localhost:%s", *port)
-
 	streamableServer := server.NewStreamableHTTPServer(mcpServer)
 
-	// Wrap with logging middleware
+	// // Wrap with logging middleware
 	loggingHandler := loggingMiddleware(streamableServer)
 
-	// Start the HTTP server with the streamable handler
+	// // Start the HTTP server with the streamable handler
 	if err := http.ListenAndServe(":"+*port, loggingHandler); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
@@ -112,6 +140,78 @@ func setupTools(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("echo_headers",
 		mcp.WithDescription("Returns all headers received by the server"),
 	), handleEchoHeaders)
+
+	s.AddTool(mcp.NewTool(
+		string("long_running_operation"),
+		mcp.WithDescription(
+			"Demonstrates a long running operation with progress updates",
+		),
+		mcp.WithNumber("duration",
+			mcp.Description("Duration of the operation in seconds"),
+			mcp.DefaultNumber(3),
+		),
+		mcp.WithNumber("steps",
+			mcp.Description("Number of steps in the operation"),
+			mcp.DefaultNumber(3),
+		),
+	), handleLongRunningOperationTool)
+
+	s.AddNotificationHandler("notification", handleNotification)
+
+}
+
+func handleNotification(
+	ctx context.Context,
+	notification mcp.JSONRPCNotification,
+) {
+	log.Printf("Received notification: %s", notification.Method)
+}
+
+func handleLongRunningOperationTool(
+	ctx context.Context,
+	request mcp.CallToolRequest,
+) (*mcp.CallToolResult, error) {
+	arguments := request.GetArguments()
+	progressToken := request.Params.Meta.ProgressToken
+	duration, _ := arguments["duration"].(float64)
+	steps, _ := arguments["steps"].(float64)
+	stepDuration := duration / steps
+	server := server.ServerFromContext(ctx)
+
+	log.Printf("long running operation called")
+	for i := 1; i < int(steps)+1; i++ {
+		time.Sleep(time.Duration(stepDuration * float64(time.Second)))
+		if progressToken != nil {
+			log.Printf("sending notification")
+			err := server.SendNotificationToClient(
+				ctx,
+				"notifications/progress",
+				map[string]any{
+					"progress":      i,
+					"total":         int(steps),
+					"progressToken": progressToken,
+					"message":       fmt.Sprintf("Server progress %v%%", int(float64(i)*100/steps)),
+				},
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to send notification: %w", err)
+			}
+		}
+	}
+	log.Printf("long running operation completed")
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf(
+					"Long running operation completed. Duration: %f seconds, Steps: %d.",
+					duration,
+					int(steps),
+				),
+			},
+		},
+	}, nil
 }
 
 // handleEcho handles the echo tool
