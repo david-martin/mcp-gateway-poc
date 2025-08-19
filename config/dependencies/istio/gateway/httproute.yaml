@@ -1,0 +1,39 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-route
+spec:
+  parentRefs:
+    - name: kuadrant-ingressgateway
+  hostnames:
+    - 'mcp.example.com' # initialize, tool list and routing authpolicy and rlp applied
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /mcp
+      backendRefs:
+        - name: toystore
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-toy-route
+  namespace: test
+  labels:
+    'mcp-server': true
+spec:
+  parentRefs:
+    - name: kuadrant-ingressgateway
+  hostnames: #this is for a specific mcp server backend whether external or internal specific RL and AP applied
+    - 'toys.mcp.example.com' # toys is the prefix for tools from this mcp server and the host is what will be re-written by the ext_proc: e.g: (host: mcp.example.com/mcp {name toys_tool}=> {name: tool} host: toys.mcp.example.com)
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /mcp
+      backendRefs:
+        - name: toystore
+          port: 80

@@ -1,0 +1,7 @@
+---
+# Adds namespace to all resources.
+namespace: mcp-server
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
