@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: mcp-helper
+  name: mcp-helper
+spec:
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+    - name: grpc
+      port: 50051
+      protocol: TCP
+      targetPort: 50051
+  selector:
+    app: mcp-helper
+  sessionAffinity: None
+  type: ClusterIP

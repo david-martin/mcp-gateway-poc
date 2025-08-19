@@ -1,0 +1,65 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-route
+spec:
+  parentRefs:
+    - name: kuadrant-ingressgateway
+  hostnames:
+    - 'mcp.example.com' # initialize, tools/list, notification and routing authpolicy and rlp applied
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: mcp-helper
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-server1-route
+  namespace: mcp-server1
+  annotations:
+    'kagenti/mcp-service-account-secret': 'toys-credential' #optional service account credential for interacting with the MCP (notifications, init)
+    'kagenti/mcp-prefix-override': 'mcp-server1-' # these could become another API
+  labels:
+    'mcp-server': 'true' # discovery
+spec:
+  parentRefs:
+    - name: ingressgateway
+  hostnames: #this is for a specific mcp server backend whether external or internal specific RL and AP applied
+    - 'mcp-server1.mcp.example.com' # tool/calls toys is the prefix for tools from this mcp server and the host is what will be re-written by the ext_proc: e.g: (host: mcp.example.com/mcp {name toys_tool}=> {name: tool} host: toys.mcp.example.com)
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: mcp-server1
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-server2-route
+  namespace: mcp-server2
+  annotations:
+    'kagenti/mcp-service-account-secret': 'toys-credential' #optional service account credential for interacting with the MCP (notifications, init)
+    'kagenti/mcp-prefix-override': 'mcp-server2-' # these could become another API or could be inferred from the hostnames (ie the first subdomain is the prefix)
+  labels:
+    'mcp-server': 'true' # discovery
+spec:
+  parentRefs:
+    - name: ingressgateway
+  hostnames: #this is for a specific mcp server backend whether external or internal specific RL and AP applied
+    - 'mcp-server1.mcp.example.com' # tool/calls toys is the prefix for tools from this mcp server and the host is what will be re-written by the ext_proc: e.g: (host: mcp.example.com/mcp {name toys_tool}=> {name: tool} host: toys.mcp.example.com)
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: mcp-server1
+          port: 80

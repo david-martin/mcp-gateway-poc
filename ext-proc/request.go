@@ -75,7 +75,7 @@ func extractMCPToolName(data map[string]any) string {
 	return nameStr
 }
 
-// Server configuration for tool processing
+// Server configuration for tool processing (populated based on HTTPRoute)
 var serverConfigs = []struct {
 	prefix string
 	target string
@@ -210,8 +210,23 @@ func (s *Server) HandleRequestBody(ctx context.Context, data map[string]any) ([]
 // createRoutingResponse creates a response with routing headers and session mapping
 func (s *Server) createRoutingResponse(toolName string, bodyBytes []byte, routeTarget, backendSession string) []*eppb.ProcessingResponse {
 	log.Printf("[EXT-PROC] 🔧 createRoutingResponse - streaming: %v, route: %s, session: %s", s.streaming, routeTarget, backendSession)
+	authority := ""
+	for _, h := range s.requestHeaders.Headers.Headers {
+		log.Println("routing response", "key", h.Key, "value", string(h.RawValue))
+		if h.Key == ":authority" {
+			authority = fmt.Sprintf("%s.mcp.example.com", routeTarget)
+			break
+		}
+	}
+	log.Println("setting authority header for mcp ", authority)
 
 	headers := []*basepb.HeaderValueOption{
+		{
+			Header: &basepb.HeaderValue{
+				Key:      ":authority",
+				RawValue: []byte(authority),
+			},
+		},
 		{
 			Header: &basepb.HeaderValue{
 				Key:      toolHeader,
