@@ -37,3 +37,5 @@ You'll see federated tools from both backend MCP servers (server1 and server2), 
 
 **Flow**: Client → Envoy → Ext-Proc (extracts tool, strips prefix, sets routing headers) → Routes to backend or helper → Response (session reverse mapping) → Client
 
+
+
